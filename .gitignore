@@ -1,0 +1,7 @@
+*.vs
+*.vscode/*
+!.vscode/tasks.json
+*.idea
+*bin
+*obj
+*sln
