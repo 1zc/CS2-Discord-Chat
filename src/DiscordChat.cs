@@ -25,15 +25,13 @@
 
 using System.Text.Json;
 using System.Text.Json.Serialization;
-using System.Collections.Concurrent;
 using RestSharp;
 using CounterStrikeSharp.API;
 using CounterStrikeSharp.API.Modules.Commands;
 using CounterStrikeSharp.API.Core;
 using CounterStrikeSharp.API.Core.Attributes;
 using CounterStrikeSharp.API.Core.Attributes.Registration;
-using System.ComponentModel;
-using System.Diagnostics;
+using System.Text.Json.Nodes;
 
 namespace DiscordChat;
 
@@ -53,6 +51,9 @@ public partial class DiscordChat : BasePlugin, IPluginConfig<DiscordChatConfig>
     public override string ModuleDescription => "Plugin to relay in-game text chat to a webhook. https://github.com/1zc/CS2-Discord-Chat";
     public override string ModuleAuthor => "Liam C. (Infra)";
 
+    // Global
+    public Dictionary<ulong, string> steamAvatars = new Dictionary<ulong, string>();
+
     // Configuraton
     public DiscordChatConfig Config { get; set; } = new DiscordChatConfig();
     public void OnConfigParsed(DiscordChatConfig config)
@@ -66,9 +67,6 @@ public partial class DiscordChat : BasePlugin, IPluginConfig<DiscordChatConfig>
         // Load config
         Config = config;
     }
-
-    // Global
-    public Dictionary<ulong, string> steamAvatars = new Dictionary<ulong, string>();
 
     public class DiscordMessage
     {
@@ -125,6 +123,12 @@ public partial class DiscordChat : BasePlugin, IPluginConfig<DiscordChatConfig>
         return HookResult.Continue;
     }
 
+    public void OnMapEnd()
+    {
+        // Clear/reset stuff here
+        steamAvatars.Clear();
+    }
+
     public async Task SendToDiscord(string text, CCSPlayerController player)
     {
         // Craft Webhook
@@ -135,13 +139,8 @@ public partial class DiscordChat : BasePlugin, IPluginConfig<DiscordChatConfig>
 
         DiscordMessage message = new DiscordMessage{content = $"{player.PlayerName!} (`{player.SteamID!}`): `"+text+"`"};
 
-        // string avatar = steamAvatars[player.SteamID];
-        // Console.WriteLine("DEBUG >> " + Config.DiscordChatStyle);
-        Server.NextFrame(() => player.PrintToChat($"CAN U SEE THIS {steamAvatars.ContainsKey(player.SteamID)}"));
         if (Config.DiscordChatStyle == 1)
         {
-            // Console.WriteLine("DEBUG >> " + steamAvatars[player.SteamID]);
-            // To-do: Implement modern styling
             message = new DiscordMessage
             {
                 content = "`"+text+"`",
@@ -165,6 +164,8 @@ public partial class DiscordChat : BasePlugin, IPluginConfig<DiscordChatConfig>
         // Hook chat listeners
         AddCommandListener("say", OnCommandSay);
         AddCommandListener("say_team", OnCommandSay);
+
+        RegisterListener<Listeners.OnMapEnd>(OnMapEnd);
     }
 
     private string SanitiseMessage(string message)
@@ -176,50 +177,23 @@ public partial class DiscordChat : BasePlugin, IPluginConfig<DiscordChatConfig>
         return message;
     }
 
-    public class SteamResponse
-    {
-        public SteamAPIPlayer[]? players { get; set; }
-    }
-
-    public class SteamAPIPlayer
-    {
-        public string? steamid { get; set; }
-        public int? communityvisibilitystate { get; set; }
-        public int? profilestate { get; set; }
-        public string? personaname { get; set; }
-        public int? commentpermission { get; set; }
-        public string? profileurl { get; set; }
-        public string? avatar { get; set; }
-        public string? avatarmedium { get; set; }
-        public string? avatarfull { get; set; }
-        public string? personastate { get; set; }
-        public string? lastlogoff { get; set; }
-        public string? realname { get; set; }
-        public string? primaryclanid { get; set; }
-        public string? timecreated { get; set; }
-        public string? personastateflags { get; set; }
-        public string? loccountrycode { get; set; }
-        public string? locstatecode { get; set; }
-        public string? loccityid { get; set; }
-    }
-
-    private async Task GetSteamAvatar(ulong steamID)
+    public async Task GetSteamAvatar(ulong steamID)
     {
         // To-do: Implement Steam API
         RestClient SteamClient = new RestClient("https://api.steampowered.com");
         RestRequest SteamRequest = new RestRequest($"/ISteamUser/GetPlayerSummaries/v2/?key={Config.DiscordChatSteamKey}&steamids={steamID}&format=json", Method.Get);
     
         // Send request
-        RestResponse SteamResponseObj = await SteamClient.GetAsync(SteamRequest);
-        SteamResponse response = JsonSerializer.Deserialize<SteamResponse>(SteamResponseObj.Content!)!;
+        RestResponse SteamResponseRaw = await SteamClient.GetAsync(SteamRequest);
+        JsonObject SteamResponse = JsonSerializer.Deserialize<JsonObject>(SteamResponseRaw.Content!)!;
 
         // Parse response
-        if (response != null)
+        if (SteamResponse != null)
         {
-            // if (steamAvatars.ContainsKey(steamID)) 
-            //     return;
-            
-            steamAvatars.Add(steamID, response.players![0].avatarfull!);
+            if (steamAvatars.ContainsKey(steamID)) 
+                return;
+
+            Server.NextFrame(() => steamAvatars.Add(steamID, SteamResponse["response"]!["players"]![0]!["avatarfull"]!.ToString()));
         }
 
         else
