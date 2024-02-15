@@ -40,7 +40,7 @@ namespace DiscordChat;
 public class DiscordChatConfig : BasePluginConfig
 {
     [JsonPropertyName("DiscordChatWebhook")] public string DiscordChatWebhook { get; set; } = "";
-    [JsonPropertyName("DiscordChatStyle")] public int DiscordChatStyle { get; set; }
+    [JsonPropertyName("DiscordChatStyle")] public int DiscordChatStyle { get; set; } = 0;
     [JsonPropertyName("DiscordChatSteamKey")] public string DiscordChatSteamKey { get; set; } = "";
 }
 
