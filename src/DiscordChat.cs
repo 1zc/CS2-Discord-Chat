@@ -64,6 +64,12 @@ public partial class DiscordChat : BasePlugin, IPluginConfig<DiscordChatConfig>
             throw new InvalidOperationException("[DISCORDCHAT ERROR] Failed to load configuration >> DiscordWebhook is a required field in the configuration file.");
         }
 
+        if (config.DiscordChatSteamKey == null || config.DiscordChatSteamKey == "")
+        {
+            // Steam Key not configured, defaulting to simple style.
+            config.DiscordChatStyle = 0;
+        }
+
         // Load config
         Config = config;
     }
